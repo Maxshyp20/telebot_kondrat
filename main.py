@@ -3,6 +3,7 @@ import csv
 import io
 import hashlib
 import hmac
+import html
 import json
 import urllib.parse
 import urllib.request
@@ -172,6 +173,7 @@ def get_admins():
 def assign_email_for_user(user_id, username, first_name, source):
     now = datetime.now(timezone.utc).isoformat()
     with db() as conn:
+        conn.execute("BEGIN IMMEDIATE")  # два человека одновременно не получат одну и ту же почту
         if user_id:
             existing = conn.execute(
                 "SELECT email, password FROM generations WHERE assigned_to_id = ? LIMIT 1",
@@ -352,8 +354,8 @@ async def credentials(message: Message):
 
     await message.answer(
         "📧 <b>Выданные данные</b>\n\n"
-        f"Почта: <code>{email}</code>\n"
-        f"Пароль: <code>{password}</code>"
+        f"Почта: <code>{html.escape(email)}</code>\n"
+        f"Пароль: <code>{html.escape(password)}</code>"
     )
 
 @dp.message(F.text == "🌐 Открыть сайт")
@@ -447,7 +449,7 @@ async def add_video_document(message: Message):
     await message.answer(f"✅ Видео «{title}» добавлено в раздел «Просмотр видео».")
 
 def _who(r):
-    name = f"@{r['username']}" if r["username"] else (r["first_name"] or "—")
+    name = html.escape(f"@{r['username']}" if r["username"] else (r["first_name"] or "—"))
     return f"{name} (id {r['telegram_id']})" if r["telegram_id"] else name
 
 @dp.message(Command("generated"))
@@ -464,7 +466,7 @@ async def generated_list(message: Message):
         return
     lines = [
         f"<b>#{r['id']}</b> {r['created_at'][:16].replace('T', ' ')} UTC · {r['source']}\n"
-        f"👤 {_who(r)}\n<code>{r['email']}</code>\n<code>{r['password']}</code>"
+        f"👤 {_who(r)}\n<code>{html.escape(r['email'])}</code>\n<code>{html.escape(r['password'])}</code>"
         for r in rows
     ]
     await message.answer("📋 <b>Последние генерации</b>\n\n" + "\n\n".join(lines))
@@ -502,7 +504,7 @@ async def users_list(message: Message):
         await message.answer("Пользователей пока нет.")
         return
     lines = [
-        f"{i}. {('@' + r['username']) if r['username'] else (r['first_name'] or '—')} · id {r['telegram_id']}\n"
+        f"{i}. {html.escape(('@' + r['username']) if r['username'] else (r['first_name'] or '—'))} · id {r['telegram_id']}\n"
         f"   с {r['joined_at'][:10]} · был {(r['last_seen'] or r['joined_at'])[:16].replace('T', ' ')}"
         for i, r in enumerate(rows, 1)
     ]
@@ -890,6 +892,8 @@ function hdrs() {
     return {"X-Init-Data": t ? t.initData : "", "X-User-Token": getToken(), "Content-Type": "application/json"}; 
 }
 
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
 async function loadData() {
     const res = await fetch("/api/admin/data", {headers: hdrs()});
     if (!res.ok) { document.body.innerHTML = "<h2 style='padding:20px'>Доступ запрещен</h2>"; return; }
@@ -903,9 +907,9 @@ async function loadData() {
     } else {
         data.free_accounts.forEach(g => {
             const div = document.createElement("div"); div.className = "list-item";
-            div.innerHTML = `<div><strong>Почта:</strong> ${g.email}</div>
-                             <div><strong>Пароль:</strong> ${g.password}</div>
-                             <div style="font-size:12px; margin-top:4px; color:var(--muted)">Добавлено: ${g.created_at ? g.created_at.slice(0, 16).replace('T', ' ') : '—'}</div>`;
+            div.innerHTML = `<div><strong>Почта:</strong> ${esc(g.email)}</div>
+                             <div><strong>Пароль:</strong> ${esc(g.password)}</div>
+                             <div style="font-size:12px; margin-top:4px; color:var(--muted)">Добавлено: ${esc(g.created_at ? g.created_at.slice(0, 16).replace('T', ' ') : '—')}</div>`;
             const btn = document.createElement("button"); btn.className = "btn-del"; btn.innerText = "Удалить";
             btn.onclick = () => deleteAccount(g.id);
             div.appendChild(btn);
@@ -922,10 +926,10 @@ async function loadData() {
         data.issued_accounts.forEach(g => {
             const div = document.createElement("div"); div.className = "list-item";
             const userStr = g.assigned_to_username ? '@' + g.assigned_to_username : (g.assigned_to_name || ('ID: ' + g.assigned_to_id));
-            div.innerHTML = `<div><strong>Почта:</strong> ${g.email}</div>
-                             <div><strong>Пароль:</strong> ${g.password}</div>
-                             <div style="font-size:13px; margin-top:4px; color:var(--accent-2)">👤 Кому выдан: <strong>${userStr}</strong> (ID: ${g.assigned_to_id})</div>
-                             <div style="font-size:12px; margin-top:2px; color:var(--muted)">Дата выдачи: ${g.assigned_to_at ? g.assigned_to_at.slice(0, 16).replace('T', ' ') : '—'}</div>`;
+            div.innerHTML = `<div><strong>Почта:</strong> ${esc(g.email)}</div>
+                             <div><strong>Пароль:</strong> ${esc(g.password)}</div>
+                             <div style="font-size:13px; margin-top:4px; color:var(--accent-2)">👤 Кому выдан: <strong>${esc(userStr)}</strong> (ID: ${esc(g.assigned_to_id)})</div>
+                             <div style="font-size:12px; margin-top:2px; color:var(--muted)">Дата выдачи: ${esc(g.assigned_to_at ? g.assigned_to_at.slice(0, 16).replace('T', ' ') : '—')}</div>`;
             const btn = document.createElement("button"); btn.className = "btn-del"; btn.innerText = "Удалить из базы";
             btn.onclick = () => deleteAccount(g.id);
             div.appendChild(btn);
@@ -941,9 +945,9 @@ async function loadData() {
     } else {
         data.users.forEach(u => {
             const div = document.createElement("div"); div.className = "list-item";
-            const mailStr = u.email ? `<span style="color:var(--accent-2);">${u.email}</span>` : '<span style="color:var(--muted);">Не получал</span>';
-            div.innerHTML = `<div><strong>Пользователь:</strong> @${u.username || ''} (${u.first_name || 'Без имени'})</div>
-                             <div style="font-size:12px; margin-top:4px; color:gray">ID: ${u.telegram_id} | Был: ${u.last_seen ? u.last_seen.slice(0, 16).replace('T', ' ') : u.joined_at.slice(0, 10)}</div>
+            const mailStr = u.email ? `<span style="color:var(--accent-2);">${esc(u.email)}</span>` : '<span style="color:var(--muted);">Не получал</span>';
+            div.innerHTML = `<div><strong>Пользователь:</strong> @${esc(u.username || '')} (${esc(u.first_name || 'Без имени')})</div>
+                             <div style="font-size:12px; margin-top:4px; color:gray">ID: ${esc(u.telegram_id)} | Был: ${esc(u.last_seen ? u.last_seen.slice(0, 16).replace('T', ' ') : u.joined_at.slice(0, 10))}</div>
                              <div style="font-size:12px; margin-top:2px;">Почта: ${mailStr}</div>`;
             usrBox.appendChild(div);
         });
