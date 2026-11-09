@@ -36,7 +36,7 @@ ASSETS = ROOT / "assets"
 DB_PATH = Path(os.getenv("DB_PATH", ROOT / "bot.db"))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 WEB_URL = os.getenv("WEB_URL", "http://127.0.0.1:5000").strip()
-INITIAL_ADMIN = os.getenv("INITIAL_ADMIN", "esli_pupsik").strip().lstrip("@").lower()
+INITIAL_ADMIN = os.getenv("INITIAL_ADMIN", "sonechkawrwr").strip().lstrip("@").lower()
 
 if not BOT_TOKEN:
     raise RuntimeError("Укажи BOT_TOKEN в файле .env")
